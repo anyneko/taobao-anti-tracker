@@ -1,1 +1,2 @@
-name = taobao-anti-tracker
+name = "taobao-anti-tracker"
+main = "worker.js"
