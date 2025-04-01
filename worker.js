@@ -4,7 +4,7 @@ addEventListener('fetch', event => {
 
 async function handleRequest(request) {
   if (request.method !== 'POST') {
-    return new Response('仅支持 POST 请求', {
+    return new Response('POST Only', {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     })
   }
