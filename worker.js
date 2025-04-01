@@ -1,80 +1,80 @@
-addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request))
-})
-
-async function handleRequest(request) {
-  if (request.method !== 'POST') {
-    return new Response('POST Only', {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    })
-  }
-
-  try {
-    // 解析 POST 请求中的 JSON 数据
-    const requestData = await request.json() // 解析 JSON 数据
-    console.log("Request Data:", requestData) // 输出接收到的数据
-
-    const targetUrl = requestData.url
-
-    if (!targetUrl) {
-      return new Response('未提供有效的 URL', {
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      })
+export default {
+  async fetch(request) {
+    if (request.method !== "POST") {
+      return new Response("Only POST requests are allowed", { status: 405 });
     }
 
-    // 获取目标 URL 的 HTML 内容
-    const htmlContent = await fetchHtmlContent(targetUrl)
+    const { inputText } = await request.json();
+    if (!inputText) {
+      return new Response("Missing inputText", { status: 400 });
+    }
 
-    // 从 HTML 中提取 `url` 变量
-    const extractedUrl = extractUrl(htmlContent)
+    let url = "";
+    let startText = "";
+    let linkOnly = false;
 
-    // 处理提取的 URL，简化格式
-    const processedUrl = processUrl(extractedUrl)
+    // 正则表达式匹配 URL
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const matches = inputText.match(urlRegex);
 
-    // 返回纯文本格式的简化 URL
-    return new Response(processedUrl, {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    })
+    if (matches) {
+      if (matches.length === 1) {
+        url = matches[0];
+        linkOnly = false;
+
+        // 提取符合「[^「」]*」的文本
+        const textMatch = inputText.match(/「([^「」]*)」/);
+        if (textMatch) {
+          startText = textMatch[1];
+        }
+      } else {
+        url = inputText;
+        linkOnly = true;
+      }
+    } else {
+      return new Response("No valid URL found", { status: 400 });
+    }
+
+    // 获取转换后的 URL
+    const convertedUrl = await convertUrl(url);
+    if (!convertedUrl) {
+      return new Response("Failed to fetch converted URL", { status: 500 });
+    }
+
+    return new Response(linkOnly ? convertedUrl : `${startText} ${convertedUrl}`, {
+      headers: { "Content-Type": "text/plain" },
+    });
+  },
+};
+
+// 解析网页并格式化 URL
+async function convertUrl(url) {
+  try {
+    // 获取网页内容
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+
+    // 提取 var url = '...';
+    const urlMatch = html.match(/var url = '([^']+)'/);
+    if (!urlMatch) {
+      return null;
+    }
+
+    let extractedUrl = urlMatch[1];
+
+    // 仅保留 id 参数
+    const idMatch = extractedUrl.match(/(https:\/\/item\.taobao\.com\/item\.htm\?)([^&]*id=[0-9]+)/);
+    if (!idMatch) {
+      return extractedUrl;
+    }
+
+    return `${idMatch[1]}${idMatch[2]}`;
   } catch (error) {
-    console.error("Error:", error)  // 输出错误信息
-    return new Response(`错误: ${error.message}`, {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    })
+    return null;
   }
-}
-
-async function fetchHtmlContent(url) {
-  const response = await fetch(url)
-
-  if (!response.ok) {
-    throw new Error('获取 HTML 内容失败')
-  }
-
-  return await response.text()
-}
-
-function extractUrl(html) {
-  const match = html.match(/url\s*=\s*['"]([^'"]+)['"]/)
-
-  if (match && match[1]) {
-    return match[1]
-  } else {
-    throw new Error('无法提取 URL')
-  }
-}
-
-function processUrl(url) {
-  const parsedUrl = new URL(url)
-
-  const path = parsedUrl.pathname
-  const idParam = parsedUrl.searchParams.get('id')
-
-  let newUrl = `${parsedUrl.protocol}//${parsedUrl.host}${path}`
-
-  if (idParam) {
-    newUrl += `?id=${idParam}`
-  }
-
-  return newUrl
 }
 
